@@ -1,8 +1,14 @@
-const dataAttribute = "data-result";
+const dataAttribute = "data-id";
 const select = {
-  resultsList: "autoComplete_results_list",
+  resultsList: "autoComplete_list",
   result: "autoComplete_result",
   highlight: "autoComplete_highlighted",
+  selectedResult: "autoComplete_selected"
+};
+const keys = {
+  ENTER: 13,
+  ARROW_UP: 38,
+  ARROW_DOWN: 40
 };
 
 /**
@@ -50,47 +56,16 @@ const highlight = value => `<span class=${select.highlight}>${value}</span>`;
  * @return void
  */
 const addResultsToList = (resultsList, dataSrc, resultItem) => {
+  const fragment = document.createDocumentFragment();
   dataSrc.forEach((event, record) => {
     const result = document.createElement(resultItem.element);
-    const resultValue = dataSrc[record].value[event.key] || dataSrc[record].value;
-    result.setAttribute(dataAttribute, resultValue);
+    const resultIndex = dataSrc[record].index;
+    result.setAttribute(dataAttribute, resultIndex);
     result.setAttribute("class", select.result);
-    result.setAttribute("tabindex", "1");
     resultItem.content ? resultItem.content(event, result) : (result.innerHTML = event.match || event);
-    resultsList.appendChild(result);
+    fragment.appendChild(result);
   });
-};
-
-/**
- * Keyboard Arrow Navigation
- *
- * @param selector
- * @param resultsList
- */
-const navigation = (selector, resultsList) => {
-  const input = getInput(selector);
-  const first = resultsList.firstChild;
-  document.onkeydown = event => {
-    const active = document.activeElement;
-    switch (event.keyCode) {
-      // Arrow Up
-      case 38:
-        if (active !== first && active !== input) {
-          active.previousSibling.focus();
-        } else if (active === first) {
-          input.focus();
-        }
-        break;
-      // Arrow Down
-      case 40:
-        if (active === input && resultsList.childNodes.length > 0) {
-          first.focus();
-        } else if (active !== resultsList.lastChild) {
-          active.nextSibling.focus();
-        }
-        break;
-    }
-  };
+  resultsList.appendChild(fragment);
 };
 
 /**
@@ -103,45 +78,108 @@ const navigation = (selector, resultsList) => {
 const clearResults = resultsList => (resultsList.innerHTML = "");
 
 /**
- * Gets user selection
+ * onSelection function
  *
+ * @param event
  * @param field
  * @param resultsList
  * @param callback
  * @param resultsValues
+ *
+ * @return void
  */
-const getSelection = (field, resultsList, callback, resultsValues) => {
-  const results = resultsList.querySelectorAll(`.${select.result}`);
-  Object.keys(results).forEach(selection => {
-    ["mousedown", "keydown"].forEach(eventType => {
-      results[selection].addEventListener(eventType, event => {
-        if (eventType === "mousedown" || event.keyCode === 13 || event.keyCode === 39) {
-          // Callback function invoked on user selection
-          callback({
-            event,
-            query:
-              getInput(field) instanceof HTMLInputElement ? getInput(field).value : getInput(field).innerHTML,
-            matches: resultsValues.matches,
-            results: resultsValues.list.map(record => record.value),
-            selection: resultsValues.list.find(value => {
-              const resValue = value.value[value.key] || value.value;
-              return resValue === event.target.closest(`.${select.result}`).getAttribute(dataAttribute);
-            }),
-          });
-          // Clear Results after selection is made
-          clearResults(resultsList);
-        }
-      });
-    });
+const onSelection = (event, field, resultsList, feedback, resultsValues, selection) => {
+  // Data feedback function invoked on user selection
+  feedback({
+    event,
+    query: field instanceof HTMLInputElement ? field.value : field.innerHTML,
+    matches: resultsValues.matches,
+    results: resultsValues.list.map(record => record.value),
+    selection: resultsValues.list.find(value => {
+      if (event.keyCode === keys.ENTER) {
+        return value.index === Number(selection.getAttribute(dataAttribute));
+      } else if (event.type === "mousedown") {
+        return value.index === Number(event.currentTarget.getAttribute(dataAttribute));
+      }
+    })
+  });
+  // Clear Results after selection is made
+  clearResults(resultsList);
+};
+
+/**
+ * Keyboard Arrow Navigation
+ *
+ * @param input
+ * @param resultsList
+ * @param feedback
+ * @param resultsValues
+ *
+ * @return void
+ */
+const navigation = (input, resultsList, feedback, resultsValues) => {
+  // Locals
+  const li = resultsList.childNodes,
+    liLength = li.length - 1;
+  let liSelected = undefined,
+    next;
+  // Remove selection class
+  const removeSelection = direction => {
+    liSelected.classList.remove(select.selectedResult);
+    if (direction === 1) {
+      next = liSelected.nextSibling;
+    } else {
+      next = liSelected.previousSibling;
+    }
+  };
+  // Add selection class
+  const highlightSelection = current => {
+    liSelected = current;
+    liSelected.classList.add(select.selectedResult);
+  };
+  // Keyboard action
+  input.onkeydown = event => {
+    if (li.length > 0) {
+      switch (event.keyCode) {
+        // Arrow Up
+        case keys.ARROW_UP:
+          // Prevent cursor relocation
+          event.preventDefault();
+          if (liSelected) {
+            removeSelection(0);
+            if (next) {
+              highlightSelection(next);
+            } else {
+              highlightSelection(li[liLength]);
+            }
+          } else {
+            highlightSelection(li[liLength]);
+          }
+          break;
+        // Arrow Down
+        case keys.ARROW_DOWN:
+          if (liSelected) {
+            removeSelection(1);
+            if (next) {
+              highlightSelection(next);
+            } else {
+              highlightSelection(li[0]);
+            }
+          } else {
+            highlightSelection(li[0]);
+          }
+          break;
+        case keys.ENTER:
+          if (liSelected) {
+            onSelection(event, input, resultsList, feedback, resultsValues, liSelected);
+          }
+      }
+    }
+  };
+  // Mouse action
+  li.forEach(selection => {
+    selection.onmousedown = event => onSelection(event, input, resultsList, feedback, resultsValues);
   });
 };
 
-export const autoCompleteView = {
-  getInput,
-  createResultsList,
-  highlight,
-  addResultsToList,
-  navigation,
-  clearResults,
-  getSelection,
-};
+export { getInput, createResultsList, highlight, addResultsToList, navigation, clearResults };

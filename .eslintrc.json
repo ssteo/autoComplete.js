@@ -25,7 +25,7 @@
       "smart-tabs"
     ],
     "no-mixed-operators": 2,
-    "no-nested-ternary": 2,
+    "no-nested-ternary": 0,
     "no-console": 2,
     "prefer-const": 2,
     "no-useless-escape": 2,
@@ -39,7 +39,7 @@
     "comma-dangle": 0,
     "max-params": [
       "error",
-      4
+      6
     ],
     "no-inline-comments": 0,
     "no-trailing-spaces": 2,
